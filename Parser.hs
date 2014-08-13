@@ -1,4 +1,5 @@
-module Parser where
+{-# LANGUAGE OverloadedStrings #-}
+module Parser (parseProgram) where
 
 import AST
 import Control.Applicative
@@ -64,3 +65,44 @@ parseBinOp cond = do
     skipSpace
     op <- satisfy cond
     return $ EBinOp op
+
+parseStatement :: Parser Statement
+parseStatement = do
+    skipSpace
+    parseExtern <|> parseFunc <|> parseTopLevelExpr
+
+parseTopLevelExpr :: Parser Statement
+parseTopLevelExpr = do
+    e <- parseExpr
+    return (STopLevelExpr e)
+
+parsePrototype :: Parser (ByteString, [ByteString])
+parsePrototype = do
+    name <- parseId
+    skipSpace
+    char '('
+    params <- (parseId <* skipSpace) `sepBy` char ','
+    char ')'
+    return (name, params)
+
+parseExtern :: Parser Statement
+parseExtern = do
+    string "extern"
+    (name, args) <- parsePrototype
+    return $ SExtern name args
+
+parseFunc :: Parser Statement
+parseFunc = do
+    string "def"
+    (name, args) <- parsePrototype
+    body <- parseExpr
+    return $ SFunc name args body
+
+parseProgram :: Parser [Statement]
+parseProgram = do
+    stmts <- parseStatement `sepBy` char ';'
+    skipSpace
+    skipMany $ char ';'
+    skipSpace
+    endOfInput
+    return stmts

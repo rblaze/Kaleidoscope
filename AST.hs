@@ -3,8 +3,9 @@ module AST where
 import Data.ByteString
 
 data Statement
-    = SProto ByteString [ByteString]
-    | SFunc ByteString [ByteString] Expr
+    = SFunc ByteString [ByteString] Expr
+    | SExtern ByteString [ByteString]
+    | STopLevelExpr Expr
     deriving Show
 
 data Expr
