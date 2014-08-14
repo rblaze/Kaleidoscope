@@ -2,6 +2,8 @@ extern sin(arg);
 extern cos ( arg ) ;
 extern atan2(arg1    arg2 ) ;
 
+def bar() 1;
+
 def foo(x y)
   1+2*(3+4*5)-y - 3*f(x, y) ;
 
