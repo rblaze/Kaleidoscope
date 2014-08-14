@@ -81,7 +81,8 @@ parsePrototype = do
     name <- parseId
     skipSpace
     char '('
-    params <- (parseId <* skipSpace) `sepBy` char ','
+    params <- parseId `sepBy` (char ' ')
+    skipSpace
     char ')'
     return (name, params)
 
@@ -100,7 +101,7 @@ parseFunc = do
 
 parseProgram :: Parser [Statement]
 parseProgram = do
-    stmts <- parseStatement `sepBy` char ';'
+    stmts <- parseStatement `sepBy` (skipSpace *> char ';')
     skipSpace
     skipMany $ char ';'
     skipSpace
