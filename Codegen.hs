@@ -11,14 +11,19 @@ genCode stmts = defaultModule {
                     moduleDefinitions = map genStatement stmts
                   }
 
+mkName :: BS8.ByteString -> Name
+mkName = Name . BS8.unpack
+
 genStatement :: Statement -> Definition
 genStatement (SFunc fname args body) = GlobalDefinition $ functionDefaults {
         returnType = double,
-        name = Name (BS8.unpack fname)
+        name = mkName fname,
+        parameters = (map (\n -> Parameter double (mkName n) []) args, False)
     }
 genStatement (SExtern fname args) = GlobalDefinition $ functionDefaults {
         returnType = double,
-        name = Name (BS8.unpack fname)
+        name = mkName fname,
+        parameters = (map (\n -> Parameter double (mkName n) []) args, False)
     }
 genStatement (STopLevelExpr expr) = GlobalDefinition functionDefaults {
         returnType = double,
