@@ -33,5 +33,7 @@ main = do
     putStrLn "Compiling"
     err <- withContext $ \ctx -> do
         runErrorT $ withModuleFromAST ctx code $ \m -> do
-            print "foo"
-    print err
+            moduleLLVMAssembly m
+    case err of
+        Left e -> putStrLn $ "Compile error: " ++ e
+        Right asm -> mapM_ putStrLn (lines asm)
