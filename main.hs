@@ -3,10 +3,13 @@ module Main where
 import System.Environment
 import Control.Monad.Error
 import Data.Attoparsec.ByteString
+import Data.Either
 import LLVM.General.PrettyPrint
 import LLVM.General.Analysis
 import LLVM.General.Context
 import LLVM.General.Module
+import LLVM.General.PassManager
+import LLVM.General.Transforms
 import qualified Data.ByteString.Char8 as BS8
 import Parser
 import Codegen
@@ -31,9 +34,24 @@ main = do
     let code = genCode ast
     putStrLn $ showPretty code
     putStrLn "Compiling"
-    err <- withContext $ \ctx -> do
+    cret <- withContext $ \ctx -> do
         runErrorT $ withModuleFromAST ctx code $ \m -> do
-            moduleLLVMAssembly m
-    case err of
-        Left e -> putStrLn $ "Compile error: " ++ e
-        Right asm -> mapM_ putStrLn (lines asm)
+            unopt <- moduleLLVMAssembly m
+            let passconf = defaultPassSetSpec {
+                transforms = [
+                    InstructionCombining,
+                    Reassociate,
+                    GlobalValueNumbering False,
+                    SimplifyControlFlowGraph
+                  ]
+              }
+            withPassManager passconf $ \pm -> do
+                runPassManager pm m
+                opt <- moduleLLVMAssembly m
+                return (unopt, opt)
+    when (isLeft cret) $ let Left e = cret in fail $ "Compile error: " ++ e
+    let Right (unoptasm, optasm) = cret
+    putStrLn "======= Unoptimized"
+    mapM_ putStrLn (lines unoptasm)
+    putStrLn "======= Optimized"
+    mapM_ putStrLn (lines optasm)
