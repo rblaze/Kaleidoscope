@@ -1,8 +1,12 @@
 module Main where
 
 import System.Environment
+import Control.Monad.Error
 import Data.Attoparsec.ByteString
 import LLVM.General.PrettyPrint
+import LLVM.General.Analysis
+import LLVM.General.Context
+import LLVM.General.Module
 import qualified Data.ByteString.Char8 as BS8
 import Parser
 import Codegen
@@ -26,3 +30,8 @@ main = do
     mapM_ print ast
     let code = genCode ast
     putStrLn $ showPretty code
+    putStrLn "Compiling"
+    err <- withContext $ \ctx -> do
+        runErrorT $ withModuleFromAST ctx code $ \m -> do
+            print "foo"
+    print err

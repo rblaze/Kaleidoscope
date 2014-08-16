@@ -3,7 +3,7 @@ module Codegen (genCode) where
 import AST
 import LLVM.General.AST
 import LLVM.General.AST.CallingConvention
-import LLVM.General.AST.Constant(Constant(Float))
+import LLVM.General.AST.Constant(Constant(Float, GlobalReference))
 import LLVM.General.AST.Float
 import LLVM.General.AST.FloatingPointPredicate(FloatingPointPredicate(ULT))
 import LLVM.General.AST.Global
@@ -43,28 +43,24 @@ genStatement funcid (STopLevelExpr expr) = GlobalDefinition functionDefaults {
         basicBlocks = [genBody expr]
     }
 
-funcRet :: Named Terminator
-funcRet = Do (Ret (Just (LocalReference double (Name "retval"))) [])
-
 genBody :: Expr -> BasicBlock
-genBody body = BasicBlock (Name "entry") code funcRet
+genBody body = BasicBlock (Name "entry") (toList code) (Do $ Ret (Just retval) [])
     where
-    code = toList $ execWriter $ evalStateT (genExpr "retval" body) 0
+    (retval, code) = runWriter $ evalStateT (genExpr "retval" body) 0
 
-
-genBinOp :: String -> (Operand -> Operand -> [t] -> Instruction) -> Expr ->Expr -> CodeWriter ()
+genBinOp :: String -> (Operand -> Operand -> [t] -> Instruction) -> Expr ->Expr -> CodeWriter Operand
 genBinOp outname op left right = do
     tmpid <- state $ \n -> (n , n + 1)
     let leftname = printf "left%d" tmpid
     let rightname = printf "right%d" tmpid
-    genExpr leftname  left
-    genExpr rightname right
-    tell $ singleton $ (Name outname) := op (LocalReference double (Name leftname))
-                                            (LocalReference double (Name rightname)) []
+    leftref <- genExpr leftname  left
+    rightref <- genExpr rightname right
+    tell $ singleton $ (Name outname) := op leftref rightref []
+    return $ LocalReference double (Name outname)
 
-genExpr :: String -> Expr -> CodeWriter ()
-genExpr outname (EConstant v) = tell $ singleton $ (Name outname) := Load False (ConstantOperand $ Float $ Double v) Nothing 0 []
-genExpr outname (EVariable var) = tell $ singleton $ (Name outname) := Load False (LocalReference double (mkName var)) Nothing 0 []
+genExpr :: String -> Expr -> CodeWriter Operand
+genExpr _ (EConstant v) = return $ ConstantOperand $ Float $ Double v
+genExpr _ (EVariable var) = return $ LocalReference double (mkName var)
 genExpr outname (EBinOp '+' left right) = genBinOp outname (FAdd NoFastMathFlags) left right
 genExpr outname (EBinOp '-' left right) = genBinOp outname (FSub NoFastMathFlags) left right
 genExpr outname (EBinOp '*' left right) = genBinOp outname (FMul NoFastMathFlags) left right
@@ -73,13 +69,15 @@ genExpr outname (EBinOp '<' left right) = do
     let tmpname = printf "cmp%d" tmpid
     genBinOp tmpname (FCmp ULT) left right
     tell $ singleton $ (Name outname) := UIToFP (LocalReference i1 (Name tmpname)) double []
+    return $ LocalReference double (Name outname)
 genExpr _ (EBinOp op _ _) = fail $ "invalid binop " ++ show op
 genExpr outname (ECall func args) = do
     baseid <- state $ \n -> (n, n + fromIntegral (length args))
     params <- zipWithM mkParam [baseid..] args
-    tell $ singleton $ (Name outname) := Call False C [] (Right $ LocalReference double $ mkName func) params [] []
+    tell $ singleton $ (Name outname) := Call False C [] (Right $ ConstantOperand $ GlobalReference double $ mkName func) params [] []
+    return $ LocalReference double (Name outname)
     where
     mkParam i expr = do
         let paramname = printf "param%d" i
-        genExpr paramname expr
-        return (LocalReference double $ Name paramname, [])
+        ref <- genExpr paramname expr
+        return (ref, [])
