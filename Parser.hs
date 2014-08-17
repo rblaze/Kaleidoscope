@@ -48,10 +48,23 @@ parseCall = do
     char ')'
     return $ ECall v args
 
+parseIf :: Parser Expr
+parseIf = do
+    skipSpace
+    string "if" *> space
+    cond <- parseExpr
+    skipSpace
+    string "then" *> space
+    trueCase <- parseExpr
+    skipSpace
+    string "else" *> space
+    falseCase <- parseExpr
+    return $ EIf cond trueCase falseCase
+
 parseTerm :: Parser Expr
 parseTerm = do
     skipSpace
-    parseNumber <|> parseParen <|> parseCall <|> parseVar
+    parseIf <|> parseNumber <|> parseParen <|> parseCall <|> parseVar
 
 parseExpr :: Parser Expr
 parseExpr = parseCompare

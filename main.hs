@@ -34,7 +34,7 @@ main = do
     let code = genCode ast
     putStrLn $ showPretty code
     putStrLn "Compiling"
-    cret <- withContext $ \ctx -> do
+    cret <- withContext $ \ctx ->
         runErrorT $ withModuleFromAST ctx code $ \m -> do
             unopt <- moduleLLVMAssembly m
             let passconf = defaultPassSetSpec {
