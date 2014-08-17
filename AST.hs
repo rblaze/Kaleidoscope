@@ -14,4 +14,5 @@ data Expr
     | EBinOp Char Expr Expr
     | ECall ByteString [Expr]
     | EIf Expr Expr Expr
+    | ELoop ByteString Expr Expr Expr Expr
     deriving Show

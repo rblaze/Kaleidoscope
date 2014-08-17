@@ -61,10 +61,28 @@ parseIf = do
     falseCase <- parseExpr
     return $ EIf cond trueCase falseCase
 
+parseFor :: Parser Expr
+parseFor = do
+    skipSpace
+    string "for" *> space
+    varname <- parseId
+    skipSpace
+    char '='
+    initExpr <- parseExpr
+    skipSpace
+    char ','
+    condExpr <- parseExpr
+    skipSpace
+    stepExpr <- option (EConstant 1.0) $ char ',' *> parseExpr
+    skipSpace 
+    string "in" *> space
+    bodyExpr <- parseExpr
+    return $ ELoop varname initExpr condExpr stepExpr bodyExpr
+
 parseTerm :: Parser Expr
 parseTerm = do
     skipSpace
-    parseIf <|> parseNumber <|> parseParen <|> parseCall <|> parseVar
+    parseFor <|> parseIf <|> parseNumber <|> parseParen <|> parseCall <|> parseVar
 
 parseExpr :: Parser Expr
 parseExpr = parseCompare

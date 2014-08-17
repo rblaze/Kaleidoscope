@@ -1,5 +1,6 @@
-def fib(x)
-  if x < 3 then
-    1
-  else
-    fib(x-1)+fib(x-2);
+extern putchard(char);
+
+def printstar2(n)
+  for i = 1, i < n in
+    putchard(42);
+

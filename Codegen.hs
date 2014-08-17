@@ -33,6 +33,10 @@ startNewBlock term newBlockName = do
     put $ CodegenState tempidx newBlockName D.empty (blocks `D.snoc` block)
     return blockname
 
+reserveTempIndex :: Word -> CodeWriter Word
+reserveTempIndex num = state $ \s -> let n = csTempIndex s
+                                      in (n , s{csTempIndex = n + num})
+
 genCode :: [Statement] -> Module
 genCode stmts = defaultModule {
                     moduleDefinitions = zipWith genStatement [0..] stmts
@@ -70,7 +74,7 @@ genBody body = flip evalState initState $ do
     
 genBinOp :: Name -> (Operand -> Operand -> [t] -> Instruction) -> Expr ->Expr -> CodeWriter Operand
 genBinOp outname op left right = do
-    tmpid <- state $ \s -> let n = csTempIndex s in (n , s{csTempIndex = n + 1})
+    tmpid <- reserveTempIndex 1
     let leftname = Name $ printf "left%d" tmpid
     let rightname = Name $ printf "right%d" tmpid
     leftref <- genExpr leftname left
@@ -85,7 +89,7 @@ genExpr outname (EBinOp '+' left right) = genBinOp outname (FAdd NoFastMathFlags
 genExpr outname (EBinOp '-' left right) = genBinOp outname (FSub NoFastMathFlags) left right
 genExpr outname (EBinOp '*' left right) = genBinOp outname (FMul NoFastMathFlags) left right
 genExpr outname (EBinOp '<' left right) = do
-    tmpid <- state $ \s -> let n = csTempIndex s in (n , s{csTempIndex = n + 1})
+    tmpid <- reserveTempIndex 1
     let tmpname = Name $ printf "cmp%d" tmpid
     genBinOp tmpname (FCmp ULT) left right
     addInstr $ outname := UIToFP (LocalReference i1 tmpname) double []
@@ -94,7 +98,7 @@ genExpr outname (EBinOp '<' left right) = do
 genExpr _ (EBinOp op _ _) = fail $ "invalid binop " ++ show op
 
 genExpr outname (ECall func args) = do
-    baseid <- state $ \s -> let n = csTempIndex s in (n , s{csTempIndex = n + fromIntegral (length args)})
+    baseid <- reserveTempIndex $ fromIntegral (length args)
     params <- zipWithM mkParam [baseid..] args
     addInstr $ outname := Call False C [] (Right $ ConstantOperand $ GlobalReference double $ mkName func) params [] []
     return $ LocalReference double outname
@@ -105,7 +109,7 @@ genExpr outname (ECall func args) = do
         return (ref, [])
 
 genExpr outname (EIf cond trueCase falseCase) = do
-    tmpid <- state $ \s -> let n = csTempIndex s in (n , s{csTempIndex = n + 1})
+    tmpid <- reserveTempIndex 1
     let condretname = Name $ printf "cond%d" tmpid
     let condvalname = Name $ printf "condval%d" tmpid
     let thenblock = Name $ printf "then%d" tmpid
@@ -113,6 +117,7 @@ genExpr outname (EIf cond trueCase falseCase) = do
     let elseblock = Name $ printf "else%d" tmpid
     let elsevalname = Name $ printf "elseval%d" tmpid
     let contblock = Name $ printf "ifend%d" tmpid
+
     condret <- genExpr condretname cond
     addInstr $ condvalname := FCmp ONE (ConstantOperand $ Float $ Double 0) condret []
     startNewBlock (Do $ CondBr (LocalReference double condvalname) thenblock elseblock []) thenblock
@@ -125,3 +130,31 @@ genExpr outname (EIf cond trueCase falseCase) = do
 
     addInstr $ outname := Phi double [(thenret, thenfinblock), (elseret, elsefinblock)] []
     return $ LocalReference double outname
+
+genExpr _ (ELoop var start cond step body) = do
+    tmpid <- reserveTempIndex 1
+    let initval = Name $ printf "loopinit%d" tmpid
+    let stepval = Name $ printf "stepval%d" tmpid
+    let loopval = Name $ printf "loopval%d" tmpid
+    let testval = Name $ printf "testval%d" tmpid
+    let condval = Name $ printf "loopcond%d" tmpid
+    let condblock = Name $ printf "cond%d" tmpid
+    let loopblock = Name $ printf "loop%d" tmpid
+    let endblock = Name $ printf "endloop%d" tmpid
+    let bodyval = Name $ printf "body%d" tmpid
+
+    initret <- genExpr initval start
+    initblock <- startNewBlock (Do $ Br condblock []) condblock
+
+    -- hackety-hack, depends on genBinOp '+'
+    addInstr $ (mkName var) := Phi double [(initret, initblock), (LocalReference double loopval, loopblock)] []
+    testret <- genExpr testval cond
+    addInstr $ condval := FCmp ONE (ConstantOperand $ Float $ Double 0) testret []
+    startNewBlock (Do $ CondBr (LocalReference double condval) loopblock endblock []) loopblock
+
+    genExpr bodyval body
+    stepret <- genExpr stepval step
+    addInstr $ loopval := FAdd NoFastMathFlags (LocalReference double $ mkName var) stepret []
+    startNewBlock (Do $ Br condblock []) endblock
+
+    return $ ConstantOperand $ Float $ Double 0
