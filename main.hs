@@ -5,7 +5,6 @@ import Control.Monad.Error
 import Data.Attoparsec.ByteString
 import Data.Either
 import LLVM.General.PrettyPrint
-import LLVM.General.Analysis
 import LLVM.General.Context
 import LLVM.General.Module
 import LLVM.General.PassManager
