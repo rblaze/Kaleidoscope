@@ -1,18 +1,16 @@
 module AST where
 
-import Data.ByteString
-
 data Statement
-    = SFunc ByteString [ByteString] Expr
-    | SExtern ByteString [ByteString]
+    = SFunc String [String] Expr
+    | SExtern String [String]
     | STopLevelExpr Expr
     deriving Show
 
 data Expr
     = EConstant Double
-    | EVariable ByteString
+    | EVariable String
     | EBinOp Char Expr Expr
-    | ECall ByteString [Expr]
+    | ECall String [Expr]
     | EIf Expr Expr Expr
-    | ELoop ByteString Expr Expr Expr Expr
+    | ELoop String Expr Expr Expr Expr
     deriving Show

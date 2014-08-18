@@ -2,30 +2,26 @@ module Main where
 
 import System.Environment
 import Control.Monad.Error
-import Data.Attoparsec.ByteString
+import Text.Parsec
 import Data.Either
 import LLVM.General.PrettyPrint
 import LLVM.General.Context
 import LLVM.General.Module
 import LLVM.General.PassManager
 import LLVM.General.Transforms
-import qualified Data.ByteString.Char8 as BS8
+import qualified Data.Text.IO as T
 import Parser
 import Codegen
-
-endParse :: Result r -> Result r
-endParse (Partial c) = endParse (c BS8.empty)
-endParse p = p
 
 main :: IO ()
 main = do
     [filename] <- getArgs
-    source <- BS8.readFile filename
-    let p = endParse $ parse parseProgram source
+    source <- T.readFile filename
+    let p = parse parseProgram filename source
     ast <- case p of
-        (Done rest stmts) | BS8.null rest -> return stmts
-        _ -> do
-                print p
+        Right stmts -> return stmts
+        Left err -> do
+                print err
                 fail "bad syntax"
 
     putStrLn "Success"

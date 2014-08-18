@@ -1,10 +1,13 @@
-{-# LANGUAGE OverloadedStrings #-}
 module Parser (parseProgram) where
 
 import AST
 import Control.Applicative
-import Data.Attoparsec.ByteString.Char8
-import Data.ByteString (ByteString)
+import Text.Parsec.Text
+import Text.Parser.Char
+import Text.Parser.Combinators
+import Text.Parser.Token
+import Text.Parser.Token.Highlight
+import qualified Data.HashSet as HS
 
 chain :: Parser Expr -> Parser (Expr -> Expr -> Expr) -> Parser Expr
 chain expr op = do
@@ -14,75 +17,54 @@ chain expr op = do
     rest l =
         do { f <- op; r <- expr; rest $ f l r } <|> return l
 
+identStyle :: IdentifierStyle Parser
+identStyle = IdentifierStyle "identifier" letter alphaNum
+    (HS.fromList ["def", "extern", "if", "then", "for", "in"]) Identifier ReservedIdentifier
+
 parseNumber :: Parser Expr
 parseNumber = do
-    skipSpace
-    v <- double
-    return $ EConstant v
-
-parseParen :: Parser Expr
-parseParen = do
-    skipSpace
-    char '('
-    v <- parseExpr
-    skipSpace
-    char ')'
-    return v
-
-parseId :: Parser ByteString
-parseId = do
-    skipSpace
-    takeWhile1 (\c -> isAlpha_ascii c || isDigit c)
+    v <- integerOrDouble
+    return $ EConstant $ case v of
+                            Right d -> d
+                            Left i -> fromIntegral i
 
 parseVar :: Parser Expr
 parseVar = do
-    v <- parseId
+    v <- ident identStyle
     return $ EVariable v
 
 parseCall :: Parser Expr
 parseCall = do
-    v <- parseId
-    skipSpace
-    char '('
-    args <- (parseExpr <* skipSpace) `sepBy` char ','
-    char ')'
+    v <- ident identStyle
+    args <- parens $ commaSep parseExpr
     return $ ECall v args
 
 parseIf :: Parser Expr
 parseIf = do
-    skipSpace
-    string "if" *> space
+    symbol "if"
     cond <- parseExpr
-    skipSpace
-    string "then" *> space
+    symbol "then"
     trueCase <- parseExpr
-    skipSpace
-    string "else" *> space
+    symbol "else"
     falseCase <- parseExpr
     return $ EIf cond trueCase falseCase
 
 parseFor :: Parser Expr
 parseFor = do
-    skipSpace
-    string "for" *> space
-    varname <- parseId
-    skipSpace
-    char '='
+    symbol "for"
+    varname <- ident identStyle
+    symbolic '='
     initExpr <- parseExpr
-    skipSpace
-    char ','
+    symbolic ','
     condExpr <- parseExpr
-    skipSpace
-    stepExpr <- option (EConstant 1.0) $ char ',' *> parseExpr
-    skipSpace 
-    string "in" *> space
+    stepExpr <- option (EConstant 1.0) $ symbolic ',' *> parseExpr
+    symbol "in"
     bodyExpr <- parseExpr
     return $ ELoop varname initExpr condExpr stepExpr bodyExpr
 
 parseTerm :: Parser Expr
-parseTerm = do
-    skipSpace
-    parseFor <|> parseIf <|> parseNumber <|> parseParen <|> parseCall <|> parseVar
+parseTerm =
+    (try parseFor) <|> (try parseIf) <|> parseNumber <|> (try parseCall) <|> parseVar <|> parens parseExpr
 
 parseExpr :: Parser Expr
 parseExpr = parseCompare
@@ -93,13 +75,12 @@ parseExpr = parseCompare
 
 parseBinOp :: (Char -> Bool) -> Parser (Expr -> Expr -> Expr)
 parseBinOp cond = do
-    skipSpace
     op <- satisfy cond
+    whiteSpace
     return $ EBinOp op
 
 parseStatement :: Parser Statement
-parseStatement = do
-    skipSpace
+parseStatement =
     parseExtern <|> parseFunc <|> parseTopLevelExpr
 
 parseTopLevelExpr :: Parser Statement
@@ -107,34 +88,28 @@ parseTopLevelExpr = do
     e <- parseExpr
     return (STopLevelExpr e)
 
-parsePrototype :: Parser (ByteString, [ByteString])
+parsePrototype :: Parser (String, [String])
 parsePrototype = do
-    name <- parseId
-    skipSpace
-    char '('
-    params <- parseId `sepBy` char ' '
-    skipSpace
-    char ')'
+    name <- ident identStyle
+    params <- parens $ commaSep $ ident identStyle
     return (name, params)
 
 parseExtern :: Parser Statement
 parseExtern = do
-    string "extern"
+    symbol "extern"
     (name, args) <- parsePrototype
     return $ SExtern name args
 
 parseFunc :: Parser Statement
 parseFunc = do
-    string "def"
+    symbol "def"
     (name, args) <- parsePrototype
     body <- parseExpr
     return $ SFunc name args body
 
 parseProgram :: Parser [Statement]
 parseProgram = do
-    stmts <- parseStatement `sepBy` (skipSpace *> char ';')
-    skipSpace
-    skipMany $ char ';'
-    skipSpace
-    endOfInput
+    stmts <- parseStatement `sepEndBy` semi
+    many $ symbolic ';'
+    eof
     return stmts

@@ -11,7 +11,6 @@ import LLVM.General.AST.Type
 import Control.Monad.State
 import Data.Word
 import Text.Printf
-import qualified Data.ByteString.Char8 as BS8
 import qualified Data.DList as D
 
 data CodegenState = CodegenState {
@@ -42,20 +41,17 @@ genCode stmts = defaultModule {
                     moduleDefinitions = zipWith genStatement [0..] stmts
                   }
 
-mkName :: BS8.ByteString -> Name
-mkName = Name . BS8.unpack
-
 genStatement :: Word -> Statement -> Definition
 genStatement _ (SFunc fname args body) = GlobalDefinition $ functionDefaults {
         returnType = double,
-        name = mkName fname,
-        parameters = (map (\n -> Parameter double (mkName n) []) args, False),
+        name = Name fname,
+        parameters = (map (\n -> Parameter double (Name n) []) args, False),
         basicBlocks = genBody body
     }
 genStatement _ (SExtern fname args) = GlobalDefinition $ functionDefaults {
         returnType = double,
-        name = mkName fname,
-        parameters = (map (\n -> Parameter double (mkName n) []) args, False)
+        name = Name fname,
+        parameters = (map (\n -> Parameter double (Name n) []) args, False)
     }
 genStatement funcid (STopLevelExpr expr) = GlobalDefinition functionDefaults {
         returnType = double,
@@ -84,7 +80,7 @@ genBinOp outname op left right = do
 
 genExpr :: Name -> Expr -> CodeWriter Operand
 genExpr _ (EConstant v) = return $ ConstantOperand $ Float $ Double v
-genExpr _ (EVariable var) = return $ LocalReference double (mkName var)
+genExpr _ (EVariable var) = return $ LocalReference double (Name var)
 genExpr outname (EBinOp '+' left right) = genBinOp outname (FAdd NoFastMathFlags) left right
 genExpr outname (EBinOp '-' left right) = genBinOp outname (FSub NoFastMathFlags) left right
 genExpr outname (EBinOp '*' left right) = genBinOp outname (FMul NoFastMathFlags) left right
@@ -100,7 +96,7 @@ genExpr _ (EBinOp op _ _) = fail $ "invalid binop " ++ show op
 genExpr outname (ECall func args) = do
     baseid <- reserveTempIndex $ fromIntegral (length args)
     params <- zipWithM mkParam [baseid..] args
-    addInstr $ outname := Call False C [] (Right $ ConstantOperand $ GlobalReference double $ mkName func) params [] []
+    addInstr $ outname := Call False C [] (Right $ ConstantOperand $ GlobalReference double $ Name func) params [] []
     return $ LocalReference double outname
     where
     mkParam i expr = do
@@ -146,14 +142,14 @@ genExpr _ (ELoop var start cond step body) = do
     initret <- genExpr initval start
     initblock <- startNewBlock (Do $ Br condblock []) condblock
 
-    addInstr $ (mkName var) := Phi double [(initret, initblock), (LocalReference double loopval, loopblock)] []
+    addInstr $ (Name var) := Phi double [(initret, initblock), (LocalReference double loopval, loopblock)] []
     testret <- genExpr testval cond
     addInstr $ condval := FCmp ONE (ConstantOperand $ Float $ Double 0) testret []
     startNewBlock (Do $ CondBr (LocalReference double condval) loopblock endblock []) loopblock
 
     genExpr bodyval body
     stepret <- genExpr stepval step
-    addInstr $ loopval := FAdd NoFastMathFlags (LocalReference double $ mkName var) stepret []
+    addInstr $ loopval := FAdd NoFastMathFlags (LocalReference double $ Name var) stepret []
     startNewBlock (Do $ Br condblock []) endblock
 
     return $ ConstantOperand $ Float $ Double 0
