@@ -6,10 +6,15 @@ data Statement
     | STopLevelExpr Expr
     deriving Show
 
+data BuiltinOrUser
+    = Builtin Char
+    | UserDefined String
+    deriving Show
+
 data Expr
     = EConstant Double
     | EVariable String
-    | EBinOp Char Expr Expr
+    | EBinOp BuiltinOrUser Expr Expr
     | ECall String [Expr]
     | EIf Expr Expr Expr
     | ELoop String Expr Expr Expr Expr

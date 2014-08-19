@@ -1,6 +1,20 @@
 extern putchard(char);
 
-def printstar2(n)
+def binary> 10 (LHS RHS)
+  RHS < LHS;
+
+def binary| 5 (LHS RHS)
+  if LHS then
+    1
+  else if RHS then
+    1
+  else
+    0;
+
+def binary= 9 (LHS RHS)
+  (LHS < RHS | LHS > RHS);
+
+def printstar2(n y)
   for i = 1, i < n in
     putchard(42);
 

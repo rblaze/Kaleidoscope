@@ -81,15 +81,17 @@ genBinOp outname op left right = do
 genExpr :: Name -> Expr -> CodeWriter Operand
 genExpr _ (EConstant v) = return $ ConstantOperand $ Float $ Double v
 genExpr _ (EVariable var) = return $ LocalReference double (Name var)
-genExpr outname (EBinOp '+' left right) = genBinOp outname (FAdd NoFastMathFlags) left right
-genExpr outname (EBinOp '-' left right) = genBinOp outname (FSub NoFastMathFlags) left right
-genExpr outname (EBinOp '*' left right) = genBinOp outname (FMul NoFastMathFlags) left right
-genExpr outname (EBinOp '<' left right) = do
+genExpr outname (EBinOp (Builtin '+') left right) = genBinOp outname (FAdd NoFastMathFlags) left right
+genExpr outname (EBinOp (Builtin '-') left right) = genBinOp outname (FSub NoFastMathFlags) left right
+genExpr outname (EBinOp (Builtin '*') left right) = genBinOp outname (FMul NoFastMathFlags) left right
+genExpr outname (EBinOp (Builtin '<') left right) = do
     tmpid <- reserveTempIndex 1
     let tmpname = Name $ printf "cmp%d" tmpid
     genBinOp tmpname (FCmp ULT) left right
     addInstr $ outname := UIToFP (LocalReference i1 tmpname) double []
     return $ LocalReference double outname
+genExpr outname (EBinOp (UserDefined f) left right) =
+    genExpr outname (ECall f [left, right])
 
 genExpr _ (EBinOp op _ _) = fail $ "invalid binop " ++ show op
 

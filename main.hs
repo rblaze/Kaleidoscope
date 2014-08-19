@@ -2,7 +2,6 @@ module Main where
 
 import System.Environment
 import Control.Monad.Error
-import Text.Parsec
 import Data.Either
 import LLVM.General.PrettyPrint
 import LLVM.General.Context
