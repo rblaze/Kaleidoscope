@@ -2,44 +2,44 @@ module Parser (parseProgram) where
 
 import AST
 import Control.Applicative
-import Text.Parsec.Text
+import Data.Text
+import Text.Parsec.Prim (Parsec, runParser, getState)
+import Text.Parsec.Error
+import Text.Parsec.Text ()
+import Text.Parsec.Pos
 import Text.Parser.Char
 import Text.Parser.Combinators
+import Text.Parser.Expression
 import Text.Parser.Token
 import Text.Parser.Token.Highlight
 import qualified Data.HashSet as HS
 
-chain :: Parser Expr -> Parser (Expr -> Expr -> Expr) -> Parser Expr
-chain expr op = do
-    l <- expr
-    rest l
-    where
-    rest l =
-        do { f <- op; r <- expr; rest $ f l r } <|> return l
+data ParserState = ParserState (OperatorTable CodeParser Expr)
+type CodeParser = Parsec Text ParserState
 
-identStyle :: IdentifierStyle Parser
+identStyle :: IdentifierStyle CodeParser
 identStyle = IdentifierStyle "identifier" letter alphaNum
     (HS.fromList ["def", "extern", "if", "then", "for", "in"]) Identifier ReservedIdentifier
 
-parseNumber :: Parser Expr
+parseNumber :: CodeParser Expr
 parseNumber = do
     v <- integerOrDouble
     return $ EConstant $ case v of
                             Right d -> d
                             Left i -> fromIntegral i
 
-parseVar :: Parser Expr
+parseVar :: CodeParser Expr
 parseVar = do
     v <- ident identStyle
     return $ EVariable v
 
-parseCall :: Parser Expr
+parseCall :: CodeParser Expr
 parseCall = do
     v <- ident identStyle
     args <- parens $ commaSep parseExpr
     return $ ECall v args
 
-parseIf :: Parser Expr
+parseIf :: CodeParser Expr
 parseIf = do
     symbol "if"
     cond <- parseExpr
@@ -49,7 +49,7 @@ parseIf = do
     falseCase <- parseExpr
     return $ EIf cond trueCase falseCase
 
-parseFor :: Parser Expr
+parseFor :: CodeParser Expr
 parseFor = do
     symbol "for"
     varname <- ident identStyle
@@ -62,54 +62,57 @@ parseFor = do
     bodyExpr <- parseExpr
     return $ ELoop varname initExpr condExpr stepExpr bodyExpr
 
-parseTerm :: Parser Expr
+parseTerm :: CodeParser Expr
 parseTerm =
-    (try parseFor) <|> (try parseIf) <|> parseNumber <|> (try parseCall) <|> parseVar <|> parens parseExpr
+    try parseFor <|> try parseIf <|> parseNumber <|> try parseCall <|> parseVar <|> parens parseExpr
 
-parseExpr :: Parser Expr
-parseExpr = parseCompare
-    where
-    parseCompare = parseAddSub `chain` parseBinOp (== '<')
-    parseAddSub = parseMul `chain` parseBinOp (\c -> c == '+' || c == '-')
-    parseMul = parseTerm `chain` parseBinOp (== '*')
+parseExpr :: CodeParser Expr
+parseExpr = do
+    ParserState ops <- getState
+    buildExpressionParser ops parseTerm
 
-parseBinOp :: (Char -> Bool) -> Parser (Expr -> Expr -> Expr)
-parseBinOp cond = do
-    op <- satisfy cond
-    whiteSpace
-    return $ EBinOp op
-
-parseStatement :: Parser Statement
+parseStatement :: CodeParser Statement
 parseStatement =
     parseExtern <|> parseFunc <|> parseTopLevelExpr
 
-parseTopLevelExpr :: Parser Statement
+parseTopLevelExpr :: CodeParser Statement
 parseTopLevelExpr = do
     e <- parseExpr
     return (STopLevelExpr e)
 
-parsePrototype :: Parser (String, [String])
+parsePrototype :: CodeParser (String, [String])
 parsePrototype = do
     name <- ident identStyle
     params <- parens $ commaSep $ ident identStyle
     return (name, params)
 
-parseExtern :: Parser Statement
+parseExtern :: CodeParser Statement
 parseExtern = do
     symbol "extern"
     (name, args) <- parsePrototype
     return $ SExtern name args
 
-parseFunc :: Parser Statement
+parseFunc :: CodeParser Statement
 parseFunc = do
     symbol "def"
     (name, args) <- parsePrototype
     body <- parseExpr
     return $ SFunc name args body
 
-parseProgram :: Parser [Statement]
-parseProgram = do
+programParser :: CodeParser [Statement]
+programParser = do
     stmts <- parseStatement `sepEndBy` semi
     many $ symbolic ';'
     eof
     return stmts
+
+defaultOps :: OperatorTable CodeParser Expr
+defaultOps = [
+    [ Infix (symbolic '*' *> return (EBinOp '*')) AssocLeft],
+    [ Infix (symbolic '+' *> return (EBinOp '+')) AssocLeft,
+            Infix (symbolic '-' *> return (EBinOp '-')) AssocLeft],
+    [ Infix (symbolic '<' *> return (EBinOp '<')) AssocNone]
+  ]
+
+parseProgram :: SourceName -> Text -> Either ParseError [Statement]
+parseProgram = runParser programParser (ParserState defaultOps)

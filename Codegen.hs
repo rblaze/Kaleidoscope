@@ -142,7 +142,7 @@ genExpr _ (ELoop var start cond step body) = do
     initret <- genExpr initval start
     initblock <- startNewBlock (Do $ Br condblock []) condblock
 
-    addInstr $ (Name var) := Phi double [(initret, initblock), (LocalReference double loopval, loopblock)] []
+    addInstr $ Name var := Phi double [(initret, initblock), (LocalReference double loopval, loopblock)] []
     testret <- genExpr testval cond
     addInstr $ condval := FCmp ONE (ConstantOperand $ Float $ Double 0) testret []
     startNewBlock (Do $ CondBr (LocalReference double condval) loopblock endblock []) loopblock

@@ -17,7 +17,7 @@ main :: IO ()
 main = do
     [filename] <- getArgs
     source <- T.readFile filename
-    let p = parse parseProgram filename source
+    let p = parseProgram filename source
     ast <- case p of
         Right stmts -> return stmts
         Left err -> do
