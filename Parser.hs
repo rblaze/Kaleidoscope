@@ -16,7 +16,7 @@ import qualified Data.HashSet as HS
 import qualified Data.IntMap as IM
 
 type Ops = IM.IntMap [Operator CodeParser Expr]
-data ParserState = ParserState Ops
+data ParserState = ParserState Ops (CodeParser Expr)
 type CodeParser = Parsec Text ParserState
 
 identStyle :: IdentifierStyle CodeParser
@@ -30,6 +30,9 @@ defaultOps = IM.fromAscListWith (++) [
     (20, [Infix (symbolic '-' *> return (EBinOp $ Builtin '-')) AssocLeft]),
     (40, [Infix (symbolic '*' *> return (EBinOp $ Builtin '*')) AssocLeft])
   ]
+
+buildExprParser :: Ops -> CodeParser Expr
+buildExprParser ops = buildExpressionParser (map snd $ IM.toDescList ops) parseTerm
 
 parseNumber :: CodeParser Expr
 parseNumber = do
@@ -78,8 +81,8 @@ parseTerm =
 
 parseExpr :: CodeParser Expr
 parseExpr = do
-    ParserState ops <- getState
-    buildExpressionParser (map snd $ IM.toDescList ops) parseTerm
+    ParserState _ parser <- getState
+    parser
 
 parseStatement :: CodeParser Statement
 parseStatement =
@@ -125,7 +128,9 @@ parseBinaryOp = do
     let addop v = case v of
                     Nothing -> Just [opdata]
                     Just ops -> Just $ opdata : ops
-    modifyState $ \(ParserState ops) -> ParserState (IM.alter addop (fromIntegral prio) ops)
+    modifyState $ \(ParserState ops _) -> let newops = IM.alter addop (fromIntegral prio) ops
+                                              parser = buildExprParser newops
+                                           in ParserState newops parser
     return $ SFunc func params body
 
 programParser :: CodeParser [Statement]
@@ -136,4 +141,4 @@ programParser = do
     return stmts
 
 parseProgram :: SourceName -> Text -> Either ParseError [Statement]
-parseProgram = runParser programParser (ParserState defaultOps)
+parseProgram = runParser programParser (ParserState defaultOps (buildExprParser defaultOps))
