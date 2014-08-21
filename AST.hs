@@ -15,6 +15,7 @@ data Expr
     = EConstant Double
     | EVariable String
     | EBinOp BuiltinOrUser Expr Expr
+    | EUnaryOp String Expr
     | ECall String [Expr]
     | EIf Expr Expr Expr
     | ELoop String Expr Expr Expr Expr

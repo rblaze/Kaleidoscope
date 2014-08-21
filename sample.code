@@ -1,5 +1,11 @@
 extern putchard(char);
 
+def unary!(v)
+  if v then
+    0
+  else
+    1;
+
 def binary> 10 (LHS RHS)
   RHS < LHS;
 
@@ -12,7 +18,7 @@ def binary| 5 (LHS RHS)
     0;
 
 def binary= 9 (LHS RHS)
-  (LHS < RHS | LHS > RHS);
+  !(LHS < RHS | LHS > RHS);
 
 def printstar2(n y)
   for i = 1, i < n in

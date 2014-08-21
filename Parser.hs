@@ -21,7 +21,7 @@ type CodeParser = Parsec Text ParserState
 
 identStyle :: IdentifierStyle CodeParser
 identStyle = IdentifierStyle "identifier" letter alphaNum
-    (HS.fromList ["def", "extern", "if", "then", "for", "in"]) Identifier ReservedIdentifier
+    (HS.fromList ["def", "extern", "if", "then", "for", "in", "binary", "unary"]) Identifier ReservedIdentifier
 
 defaultOps :: Ops
 defaultOps = IM.fromAscListWith (++) [
@@ -86,7 +86,7 @@ parseExpr = do
 
 parseStatement :: CodeParser Statement
 parseStatement =
-    parseExtern <|> try parseBinaryOp <|> parseFunc <|> parseTopLevelExpr
+    parseExtern <|> try parseBinaryOp <|> try parseUnaryOp <|> parseFunc <|> parseTopLevelExpr
 
 parseTopLevelExpr :: CodeParser Statement
 parseTopLevelExpr = do
@@ -112,6 +112,25 @@ parseFunc = do
     body <- parseExpr
     return $ SFunc name args body
 
+parseUnaryOp :: CodeParser Statement
+parseUnaryOp = do
+    symbol "def"
+    string "unary"
+    whiteSpace
+    op <- anyChar
+    whiteSpace
+    param <- parens $ ident identStyle
+    body <- parseExpr
+    let func = 'u':op:"unop"
+    let opdata = Prefix (symbolic op *> return (EUnaryOp func))
+    let addop v = case v of
+                    Nothing -> Just [opdata]
+                    Just ops -> Just $ opdata : ops
+    modifyState $ \(ParserState ops _) -> let newops = IM.alter addop maxBound ops
+                                              parser = buildExprParser newops
+                                           in ParserState newops parser
+    return $ SFunc func [param] body
+
 parseBinaryOp :: CodeParser Statement
 parseBinaryOp = do
     symbol "def"
@@ -121,7 +140,10 @@ parseBinaryOp = do
     whiteSpace
     prio <- decimal
     whiteSpace
-    params <- parens $ many (ident identStyle)
+    params <- parens $ do
+                        param1 <- ident identStyle
+                        param2 <- ident identStyle
+                        return [param1, param2]
     body <- parseExpr
     let func = 'u':op:"binop"
     let opdata = Infix (symbolic op *> return (EBinOp $ UserDefined func)) AssocNone

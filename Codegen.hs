@@ -90,10 +90,11 @@ genExpr outname (EBinOp (Builtin '<') left right) = do
     genBinOp tmpname (FCmp ULT) left right
     addInstr $ outname := UIToFP (LocalReference i1 tmpname) double []
     return $ LocalReference double outname
-genExpr outname (EBinOp (UserDefined f) left right) =
-    genExpr outname (ECall f [left, right])
+genExpr outname (EBinOp (UserDefined f) left right) = genExpr outname (ECall f [left, right])
 
 genExpr _ (EBinOp op _ _) = fail $ "invalid binop " ++ show op
+
+genExpr outname (EUnaryOp f arg) = genExpr outname (ECall f [arg])
 
 genExpr outname (ECall func args) = do
     baseid <- reserveTempIndex $ fromIntegral (length args)
