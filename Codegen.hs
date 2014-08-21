@@ -137,20 +137,22 @@ genExpr _ (ELoop var start cond step body) = do
     let loopval = Name $ printf "loopval%d" tmpid
     let testval = Name $ printf "testval%d" tmpid
     let condval = Name $ printf "loopcond%d" tmpid
-    let condblock = Name $ printf "cond%d" tmpid
-    let loopblock = Name $ printf "loop%d" tmpid
-    let endblock = Name $ printf "endloop%d" tmpid
+    let condblock = Name $ printf "loop%dcond" tmpid
+    let loopblock = Name $ printf "loop%dbody" tmpid
+    let stepblock = Name $ printf "loop%dstep" tmpid
+    let endblock = Name $ printf "loop%dend" tmpid
     let bodyval = Name $ printf "body%d" tmpid
 
     initret <- genExpr initval start
     initblock <- startNewBlock (Do $ Br condblock []) condblock
 
-    addInstr $ Name var := Phi double [(initret, initblock), (LocalReference double loopval, loopblock)] []
+    addInstr $ Name var := Phi double [(initret, initblock), (LocalReference double loopval, stepblock)] []
     testret <- genExpr testval cond
     addInstr $ condval := FCmp ONE (ConstantOperand $ Float $ Double 0) testret []
     startNewBlock (Do $ CondBr (LocalReference double condval) loopblock endblock []) loopblock
 
     genExpr bodyval body
+    startNewBlock (Do $ Br stepblock []) stepblock
     stepret <- genExpr stepval step
     addInstr $ loopval := FAdd NoFastMathFlags (LocalReference double $ Name var) stepret []
     startNewBlock (Do $ Br condblock []) endblock
