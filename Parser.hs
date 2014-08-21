@@ -21,7 +21,7 @@ type CodeParser = Parsec Text ParserState
 
 identStyle :: IdentifierStyle CodeParser
 identStyle = IdentifierStyle "identifier" letter alphaNum
-    (HS.fromList ["def", "extern", "if", "then", "for", "in", "binary", "unary"]) Identifier ReservedIdentifier
+    (HS.fromList ["def", "extern", "if", "then", "for", "in", "binary", "unary", "var"]) Identifier ReservedIdentifier
 
 defaultOps :: Ops
 defaultOps = IM.fromAscListWith (++) [
