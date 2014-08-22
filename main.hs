@@ -36,7 +36,8 @@ main = do
                     InstructionCombining,
                     Reassociate,
                     GlobalValueNumbering False,
-                    SimplifyControlFlowGraph
+                    SimplifyControlFlowGraph,
+                    PromoteMemoryToRegister
                   ]
               }
             withPassManager passconf $ \pm -> do
