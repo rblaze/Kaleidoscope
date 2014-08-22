@@ -172,3 +172,17 @@ genExpr _ (ELoop var start cond step body) = do
         startNewBlock (Do $ Br condblock []) endblock
 
     return $ ConstantOperand $ Float $ Double 0
+
+genExpr outname (ELet var initval expr) = do
+    tmpid <- reserveTempIndex 1
+    let initname = Name $ printf "varinit%d" tmpid
+
+    initret <- genExpr initname initval
+    addInstr $ Name var := Alloca double Nothing 0 []
+    addInstr $ Do $ Store False (LocalReference double $ Name var) initret Nothing 0 []
+    local (M.insert var AllocA) $ genExpr outname expr
+
+genExpr outname (EAssign var expr) = do
+    val <- genExpr outname expr
+    addInstr $ Do $ Store False (LocalReference double $ Name var) val Nothing 0 []
+    return val

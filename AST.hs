@@ -19,4 +19,6 @@ data Expr
     | ECall String [Expr]
     | EIf Expr Expr Expr
     | ELoop String Expr Expr Expr Expr
+    | ELet String Expr Expr
+    | EAssign String Expr
     deriving Show

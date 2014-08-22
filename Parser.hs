@@ -25,11 +25,16 @@ identStyle = IdentifierStyle "identifier" letter alphaNum
 
 defaultOps :: Ops
 defaultOps = IM.fromAscListWith (++) [
+    (2, [Infix (symbolic '=' *> return mkAssign) AssocNone]),
     (10, [Infix (symbolic '<' *> return (EBinOp $ Builtin '<')) AssocNone]),
     (20, [Infix (symbolic '+' *> return (EBinOp $ Builtin '+')) AssocLeft]),
     (20, [Infix (symbolic '-' *> return (EBinOp $ Builtin '-')) AssocLeft]),
     (40, [Infix (symbolic '*' *> return (EBinOp $ Builtin '*')) AssocLeft])
   ]
+    where
+    mkAssign left right = case left of
+        EVariable name -> EAssign name right
+        _ -> error "Variable requred in the left part of assignment"
 
 buildExprParser :: Ops -> CodeParser Expr
 buildExprParser ops = buildExpressionParser (map snd $ IM.toDescList ops) parseTerm
@@ -75,9 +80,21 @@ parseFor = do
     bodyExpr <- parseExpr
     return $ ELoop varname initExpr condExpr stepExpr bodyExpr
 
+parseLet :: CodeParser Expr
+parseLet = do
+    symbol "var"
+    let getvar = do
+        v <- ident identStyle
+        initexpr <- option (EConstant 0) $ symbolic '=' *> parseExpr
+        return (v, initexpr)
+    vars <- commaSep getvar
+    symbol "in"
+    subexpr <- parseExpr
+    return $ foldr (\(v, initexpr) e -> ELet v initexpr e) subexpr vars
+
 parseTerm :: CodeParser Expr
 parseTerm =
-    try parseFor <|> try parseIf <|> parseNumber <|> try parseCall <|> parseVar <|> parens parseExpr
+    try parseLet <|> try parseFor <|> try parseIf <|> parseNumber <|> try parseCall <|> parseVar <|> parens parseExpr
 
 parseExpr :: CodeParser Expr
 parseExpr = do
