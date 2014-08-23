@@ -1,0 +1,6 @@
+extern sin(x);
+extern cos(x);
+
+def square(x) x * x;
+
+def main() var x = 0.2 in square(sin(x)) + square(cos(x));
